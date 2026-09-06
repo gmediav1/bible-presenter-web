@@ -1,5 +1,6 @@
 import "./styles.css"
 import { suggestBibleBooks } from "../shared/bible-books.js"
+import { cachePassage, readCachedPassage } from "./passage-cache.js"
 
 const translations = [
   { id: "amp", short: "AMP", name: "Amplified Bible", licensed: true },
@@ -19,12 +20,17 @@ let current = readSavedState() || defaultState
 let outputWindow = null
 let referenceSuggestions = []
 let activeSuggestion = -1
+let outputStateSignature = ""
 
 if (isOutputWindow) {
   document.title = "Bible Presenter - Ausgabe"
   document.body.classList.add("output-mode")
   renderOutput()
   channel?.postMessage({ type: "request-state" })
+  window.addEventListener("focus", syncOutputFromStorage)
+  window.addEventListener("pageshow", syncOutputFromStorage)
+  setInterval(syncOutputFromStorage, 1000)
+  setInterval(requestCurrentOutputState, 2500)
 } else {
   channel?.addEventListener("message", (event) => {
     if (event.data?.type === "request-state") publishState()
@@ -34,14 +40,18 @@ if (isOutputWindow) {
 
 window.addEventListener("storage", (event) => {
   if (!isOutputWindow || event.key !== "bible-presenter-live" || !event.newValue) return
-  current = JSON.parse(event.newValue)
-  renderOutput()
+  try { applyOutputState(JSON.parse(event.newValue)) } catch { /* Ignore incomplete cross-window writes. */ }
 })
 
 channel?.addEventListener("message", (event) => {
   if (!isOutputWindow || event.data?.type !== "state") return
-  current = event.data.state
-  renderOutput()
+  applyOutputState(event.data.state)
+})
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== location.origin) return
+  if (isOutputWindow && event.data?.type === "state") applyOutputState(event.data.state)
+  if (!isOutputWindow && event.data?.type === "request-state") publishState()
 })
 
 function render() {
@@ -188,6 +198,13 @@ async function loadPassage(event) {
   event?.preventDefault()
   const field = document.querySelector("#reference")
   current.reference = field?.value.trim() || current.reference
+  const cached = readCachedPassage(localStorage, current.translation, current.reference)
+  if (cached) {
+    current = { ...current, ...cached, loading: false, error: "" }
+    render()
+    publishState()
+    return
+  }
   current.loading = true
   current.error = ""
   render()
@@ -196,6 +213,7 @@ async function loadPassage(event) {
     const response = await fetch(`/api/bible?${params}`)
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.error || "Die Bibelstelle konnte nicht geladen werden.")
+    cachePassage(localStorage, current.translation, current.reference, payload)
     current = { ...current, ...payload, loading: false, error: "" }
   } catch (error) {
     current.loading = false
@@ -246,6 +264,31 @@ function publishState() {
   const state = { ...current, loading: false }
   localStorage.setItem("bible-presenter-live", JSON.stringify(state))
   channel?.postMessage({ type: "state", state })
+  if (outputWindow && !outputWindow.closed) outputWindow.postMessage({ type: "state", state }, location.origin)
+}
+
+function applyOutputState(state) {
+  if (!state) return
+  const signature = JSON.stringify(state)
+  if (signature === outputStateSignature) return
+  outputStateSignature = signature
+  current = state
+  renderOutput()
+}
+
+function syncOutputFromStorage() {
+  if (!isOutputWindow) return
+  try {
+    const saved = localStorage.getItem("bible-presenter-live")
+    if (saved && saved !== outputStateSignature) applyOutputState(JSON.parse(saved))
+  } catch {
+    // BroadcastChannel remains the primary synchronization path.
+  }
+}
+
+function requestCurrentOutputState() {
+  channel?.postMessage({ type: "request-state" })
+  if (window.opener && !window.opener.closed) window.opener.postMessage({ type: "request-state" }, location.origin)
 }
 
 function readSavedState() {
