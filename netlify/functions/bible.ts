@@ -63,10 +63,11 @@ export default async (request: Request, _context: Context) => {
       const number = Number(verse.number || verse.verse_number || verse.verse || verse.id || verse.title)
       return number >= parsed.firstVerse && number <= parsed.lastVerse
     })
-    const verses = await Promise.all(selected.map(async (verse: any, index: number) => {
+    const verses = []
+    for (const [index, verse] of selected.entries()) {
       const passage = verse.passage_id ? await yv(`bibles/${translation.id}/passages/${verse.passage_id}?format=text&include_headings=false&include_notes=false`, key) : verse
-      return { number: Number(verse.number || verse.verse_number || verse.verse || verse.id || verse.title || index + parsed.firstVerse), text: text(passage) }
-    }))
+      verses.push({ number: Number(verse.number || verse.verse_number || verse.verse || verse.id || verse.title || index + parsed.firstVerse), text: text(passage) })
+    }
     if (!verses.length) return Response.json({ error:"Für diese Stelle wurden keine Verse gefunden." }, { status:404 })
     return Response.json({ verses, title: `${details?.localized_title || details?.title || translation.name} · ${url.searchParams.get("reference")}`, copyright: details?.copyright || details?.copyright_text || "" }, { headers:{ "Cache-Control":"public, max-age=300" } })
   } catch (error: any) {
