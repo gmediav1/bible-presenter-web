@@ -1,4 +1,5 @@
 import "./styles.css"
+import { suggestBibleBooks } from "../shared/bible-books.js"
 
 const translations = [
   { id: "amp", short: "AMP", name: "Amplified Bible", licensed: true },
@@ -16,6 +17,8 @@ const isOutputWindow = location.pathname.startsWith("/output")
 const defaultState = { reference: "John 3:16", translation: "niv", verses: [], title: "", copyright: "", loading: false, error: "" }
 let current = readSavedState() || defaultState
 let outputWindow = null
+let referenceSuggestions = []
+let activeSuggestion = -1
 
 if (isOutputWindow) {
   document.title = "Bible Presenter - Ausgabe"
@@ -55,11 +58,14 @@ function render() {
         <header class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Bible Presenter</span></header>
         <form id="reference-form" class="reference-form">
           <label for="reference">Bibelstelle</label>
-          <div class="input-row">
-            <input id="reference" name="reference" value="${escapeAttr(current.reference)}" autocomplete="off" spellcheck="false" placeholder="z. B. John 3:16" />
-            <button class="show-button" type="submit">Anzeigen</button>
+          <div class="reference-search">
+            <div class="input-row">
+              <input id="reference" name="reference" value="${escapeAttr(current.reference)}" autocomplete="off" spellcheck="false" placeholder="z. B. Mat 5:3-10 oder Ps 23" role="combobox" aria-autocomplete="list" aria-controls="reference-suggestions" aria-expanded="false" />
+              <button class="show-button" type="submit">Anzeigen</button>
+            </div>
+            <div id="reference-suggestions" class="reference-suggestions" role="listbox" hidden></div>
           </div>
-          <p class="help">Englische Buchnamen, Kapitel und Versbereich verwenden.</p>
+          <p class="help">Kürzel funktionieren: Mat, Ps, Joh, 1 Kor …</p>
         </form>
         <section class="translation-section" aria-labelledby="translation-heading">
           <h2 id="translation-heading">Übersetzung</h2>
@@ -90,6 +96,10 @@ function render() {
     </section>`
 
   document.querySelector("#reference-form").addEventListener("submit", loadPassage)
+  const referenceInput = document.querySelector("#reference")
+  referenceInput.addEventListener("input", updateReferenceSuggestions)
+  referenceInput.addEventListener("keydown", handleReferenceKeys)
+  referenceInput.addEventListener("blur", () => setTimeout(closeReferenceSuggestions, 120))
   document.querySelectorAll("[data-translation]").forEach((button) => button.addEventListener("click", () => {
     current.translation = button.dataset.translation
     current.error = ""
@@ -98,6 +108,65 @@ function render() {
   }))
   document.querySelector("#fullscreen").addEventListener("click", toggleFullscreen)
   document.querySelector("#open-output").addEventListener("click", openOutput)
+}
+
+function updateReferenceSuggestions(event) {
+  current.reference = event.currentTarget.value
+  referenceSuggestions = suggestBibleBooks(current.reference)
+  activeSuggestion = referenceSuggestions.length ? 0 : -1
+  paintReferenceSuggestions()
+}
+
+function paintReferenceSuggestions() {
+  const list = document.querySelector("#reference-suggestions")
+  const field = document.querySelector("#reference")
+  if (!list || !field) return
+  list.hidden = !referenceSuggestions.length
+  field.setAttribute("aria-expanded", String(Boolean(referenceSuggestions.length)))
+  field.setAttribute("aria-activedescendant", activeSuggestion >= 0 ? `reference-option-${activeSuggestion}` : "")
+  list.innerHTML = referenceSuggestions.map((book, index) => `
+    <button id="reference-option-${index}" class="reference-suggestion ${index === activeSuggestion ? "active" : ""}" type="button" role="option" aria-selected="${index === activeSuggestion}" data-suggestion="${index}">
+      <span><strong>${escapeHtml(book.name)}</strong><small>${escapeHtml(book.aliases.slice(0, 3).join(" · "))}</small></span>
+      <span class="suggested-reference">${escapeHtml(book.reference)}</span>
+    </button>`).join("")
+  list.querySelectorAll("[data-suggestion]").forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault())
+    button.addEventListener("click", () => selectReferenceSuggestion(Number(button.dataset.suggestion)))
+  })
+}
+
+function selectReferenceSuggestion(index) {
+  const suggestion = referenceSuggestions[index]
+  const field = document.querySelector("#reference")
+  if (!suggestion || !field) return
+  current.reference = suggestion.reference
+  field.value = suggestion.reference
+  closeReferenceSuggestions()
+  field.focus()
+}
+
+function closeReferenceSuggestions() {
+  referenceSuggestions = []
+  activeSuggestion = -1
+  paintReferenceSuggestions()
+}
+
+function handleReferenceKeys(event) {
+  if (!referenceSuggestions.length) return
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault()
+    const direction = event.key === "ArrowDown" ? 1 : -1
+    activeSuggestion = (activeSuggestion + direction + referenceSuggestions.length) % referenceSuggestions.length
+    paintReferenceSuggestions()
+  } else if (event.key === "Enter" && activeSuggestion >= 0) {
+    event.preventDefault()
+    const completeReference = referenceSuggestions[activeSuggestion]?.reference || ""
+    selectReferenceSuggestion(activeSuggestion)
+    if (/\s\d+:\d+(?:-\d+)?$/.test(completeReference)) loadPassage()
+  } else if (event.key === "Escape") {
+    event.preventDefault()
+    closeReferenceSuggestions()
+  }
 }
 
 function renderOutput() {

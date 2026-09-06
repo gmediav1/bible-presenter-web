@@ -4,6 +4,8 @@ Eine schlanke Präsentations-Webapp für die sieben Übersetzungen aus ChurchPre
 
 Über **Ausgabefenster öffnen** wird eine getrennte, live synchronisierte Ausgabe für einen zweiten Bildschirm gestartet. Die Vollbild-Schaltfläche befindet sich direkt im Ausgabefenster.
 
+Die Bibelstellen-Suche erkennt die englischen und deutschen Kürzel der lokalen App für alle 66 Bücher. Beispiele: `Mat 5:3-10`, `Ps 23`, `Joh 3:16` oder `1 Kor 13`. Vorschläge lassen sich per Maus oder mit Pfeiltasten und Enter auswählen.
+
 ## Lokaler Start
 
 ```bash
