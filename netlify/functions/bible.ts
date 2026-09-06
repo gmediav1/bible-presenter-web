@@ -3,10 +3,10 @@ import type { Config, Context } from "@netlify/functions"
 const translations: Record<string, { id: string; short: string; name: string }> = {
   amp: { id: "1588", short: "AMP", name: "Amplified Bible" },
   niv: { id: "111", short: "NIV", name: "New International Version" },
-  kjv: { id: "1", short: "KJV", name: "King James Version" },
+  kjv: { id: "kjv", short: "KJV", name: "King James Version" },
   asv: { id: "12", short: "ASV", name: "American Standard Version" },
   web: { id: "206", short: "WEB", name: "World English Bible" },
-  wmb: { id: "1204", short: "WMB", name: "World Messianic Bible" },
+  wmb: { id: "1209", short: "WMB", name: "World Messianic Bible" },
   bsb: { id: "3034", short: "BSB", name: "Berean Study Bible" }
 }
 
@@ -44,18 +44,28 @@ export default async (request: Request, _context: Context) => {
     const translation = translations[url.searchParams.get("translation") || "niv"]
     if (!translation) return Response.json({ error:"Unbekannte Übersetzung." }, { status:400 })
     const parsed = parseReference(url.searchParams.get("reference") || "")
+    if (translation.id === "kjv") {
+      const response = await fetch(`https://bible-api.com/${encodeURIComponent(url.searchParams.get("reference") || "")}?translation=kjv`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.verses?.length) return Response.json({ error:"Die KJV-Stelle konnte nicht geladen werden." }, { status:502 })
+      return Response.json({
+        verses: payload.verses.map((verse: any) => ({ number:Number(verse.verse), text:text(verse.text) })),
+        title: `King James Version · ${payload.reference || url.searchParams.get("reference")}`,
+        copyright: "King James Version - public domain outside the United Kingdom."
+      }, { headers:{ "Cache-Control":"public, max-age=300" } })
+    }
     const [details, versesPayload] = await Promise.all([
       yv(`bibles/${translation.id}`, key),
       yv(`bibles/${translation.id}/books/${parsed.book}/chapters/${parsed.chapter}/verses`, key)
     ])
     const rawVerses = Array.isArray(versesPayload) ? versesPayload : versesPayload?.items || []
     const selected = rawVerses.filter((verse: any) => {
-      const number = Number(verse.number || verse.verse_number || verse.verse)
+      const number = Number(verse.number || verse.verse_number || verse.verse || verse.id || verse.title)
       return number >= parsed.firstVerse && number <= parsed.lastVerse
     })
     const verses = await Promise.all(selected.map(async (verse: any, index: number) => {
       const passage = verse.passage_id ? await yv(`bibles/${translation.id}/passages/${verse.passage_id}?format=text&include_headings=false&include_notes=false`, key) : verse
-      return { number: Number(verse.number || verse.verse_number || index + parsed.firstVerse), text: text(passage) }
+      return { number: Number(verse.number || verse.verse_number || verse.verse || verse.id || verse.title || index + parsed.firstVerse), text: text(passage) }
     }))
     if (!verses.length) return Response.json({ error:"Für diese Stelle wurden keine Verse gefunden." }, { status:404 })
     return Response.json({ verses, title: `${details?.localized_title || details?.title || translation.name} · ${url.searchParams.get("reference")}`, copyright: details?.copyright || details?.copyright_text || "" }, { headers:{ "Cache-Control":"public, max-age=300" } })
