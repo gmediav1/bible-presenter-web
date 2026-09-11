@@ -26,6 +26,7 @@ let outputWindow = null
 let referenceSuggestions = []
 let activeSuggestion = -1
 let outputStateSignature = ""
+let desktopSettings = { preferredOutputDisplayId: null, displays: [] }
 
 if (isOutputWindow) {
   document.title = "Bible Presenter - Ausgabe"
@@ -42,6 +43,7 @@ if (isOutputWindow) {
     if (event.data?.type === "request-state") publishState()
   })
   render()
+  if (desktop) desktop.getSettings().then(applyDesktopSettings)
 }
 
 if (isOutputWindow && desktop) desktop.onPresentationState(applyOutputState)
@@ -97,6 +99,7 @@ function render() {
         <div class="output-controls">
           <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
           <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
+          ${desktop ? `<label class="display-label" for="output-display">Ausgabebildschirm</label><select id="output-display"><option value="">Automatisch: zweiter Bildschirm</option>${desktopSettings.displays.map((display) => `<option value="${escapeAttr(display.id)}" ${display.id === desktopSettings.preferredOutputDisplayId ? "selected" : ""}>${escapeHtml(display.label)}</option>`).join("")}</select>` : ""}
         </div>
         <footer><span>8 Übersetzungen eingerichtet</span><span class="status ${current.verses.length ? "ready" : ""}">${current.verses.length ? "Live bereit" : "Bereit"}</span></footer>
       </aside>
@@ -126,6 +129,20 @@ function render() {
   }))
   document.querySelector("#fullscreen").addEventListener("click", toggleFullscreen)
   document.querySelector("#open-output").addEventListener("click", openOutput)
+  document.querySelector("#output-display")?.addEventListener("change", async (event) => {
+    desktopSettings.preferredOutputDisplayId = await desktop.setOutputDisplay(event.currentTarget.value)
+    render()
+  })
+}
+
+function applyDesktopSettings(settings) {
+  if (!settings) return
+  desktopSettings = { preferredOutputDisplayId: settings.preferredOutputDisplayId || null, displays: settings.displays || [] }
+  if (!savedState && settings.lastReference) {
+    current.reference = settings.lastReference
+    if (translations.some((translation) => translation.id === settings.lastTranslation)) current.translation = settings.lastTranslation
+  }
+  render()
 }
 
 function updateReferenceSuggestions(event) {
@@ -283,6 +300,7 @@ function publishState() {
   const state = { ...current, loading: false }
   localStorage.setItem("bible-presenter-live", JSON.stringify(state))
   desktop?.sendPresentationState(state)
+  desktop?.saveControlPreferences({ reference: state.reference, translation: state.translation })
   channel?.postMessage({ type: "state", state })
   if (outputWindow && !outputWindow.closed) outputWindow.postMessage({ type: "state", state }, location.origin)
 }

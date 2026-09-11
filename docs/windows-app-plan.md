@@ -22,13 +22,13 @@ Die neue Anwendung erhält eine eigene Windows-App-ID (`de.gwinnmedia.bibleprese
 
 **Ergebnis:** Ein Programm mit zwei synchronisierten Fenstern, nicht zwei installierte Apps. Das Steuerfenster übergibt den Zustand direkt an Electron; die Ausgabe startet auf dem zweiten Bildschirm im Vollbild. Ohne zweiten Bildschirm öffnet sich eine normale Ausgabe, damit die Steuerung sichtbar bleibt.
 
-## Phase 3 – Lokaler Cache und Einstellungen
+## Phase 3 – Lokaler Cache und Einstellungen ✓
 
 - Bibelstellen und Übersetzungsmetadaten dauerhaft im eigenen App-Datenordner cachen.
 - Einstellungen wie zuletzt gewählte Übersetzung, Fenstergrößen und Ausgabebildschirm speichern.
-- Optionalen, nur lesenden Import aus ChurchPresenter als getrennte Funktion anbieten.
+- Kein automatischer Import aus ChurchPresenter: Die beiden Apps bleiben bewusst vollständig getrennt. Ein expliziter, nur lesender Import kann später separat ergänzt werden.
 
-**Ergebnis:** Bereits verwendete Stellen starten schnell und bleiben ohne Netz verfügbar.
+**Ergebnis:** Bereits verwendete Stellen starten schnell und bleiben ohne Netz verfügbar. Fenstergröße, letzte Bibelstelle, Übersetzung und bevorzugter Ausgabebildschirm werden separat im Bible-Presenter-Datenordner gespeichert.
 
 ## Phase 4 – Windows-Installer und Updates
 
