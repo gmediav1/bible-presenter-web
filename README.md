@@ -19,6 +19,15 @@ npm run desktop:start
 
 Die Desktop-App verwendet für Bibeltexte weiterhin die Netlify-Schnittstelle. Dadurch bleiben YouVersion-Zugangsdaten ausschließlich auf dem Server.
 
+## Windows-Installer erstellen
+
+```bash
+npm install
+npm run package:win
+```
+
+Der Installer liegt danach unter `release/Bible-Presenter-Setup-<Version>.exe`. Er wird unabhängig von ChurchPresenter installiert. Für Updates werden die Release-Dateien dieses GitHub-Repositorys verwendet; die App fragt vor Download und Installation nach.
+
 ## Lokaler Start
 
 ```bash

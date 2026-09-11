@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, screen } = require("electron")
+const { app, BrowserWindow, dialog, ipcMain, screen } = require("electron")
+const { autoUpdater } = require("electron-updater")
 const path = require("node:path")
 const { createPersistence } = require("./persistence.cjs")
 
@@ -9,6 +10,7 @@ const TRANSLATIONS = new Set(["amp", "niv", "nlt", "kjv", "asv", "web", "wmb", "
 let controlWindow
 let outputWindow
 let presentationState
+let updatePromptOpen = false
 
 // This intentionally differs from ChurchPresenter. Electron uses this folder
 // for settings, cookies and cached Bible passages on Windows and macOS.
@@ -174,8 +176,49 @@ ipcMain.handle("bible:load", async (event, request) => {
   return { ok: response.ok, payload }
 })
 
+function configureUpdates() {
+  if (!app.isPackaged) return
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.on("update-available", async (info) => {
+    if (updatePromptOpen || !controlWindow) return
+    updatePromptOpen = true
+    const result = await dialog.showMessageBox(controlWindow, {
+      type: "info",
+      title: "Update verfügbar",
+      message: `Bible Presenter ${info.version} ist verfügbar.`,
+      detail: "Das Update wird nur heruntergeladen, wenn du zustimmst.",
+      buttons: ["Herunterladen", "Später"],
+      defaultId: 0,
+      cancelId: 1
+    })
+    updatePromptOpen = false
+    if (result.response === 0) autoUpdater.downloadUpdate().catch(() => {})
+  })
+  autoUpdater.on("update-downloaded", async (info) => {
+    if (!controlWindow) return
+    const result = await dialog.showMessageBox(controlWindow, {
+      type: "info",
+      title: "Update bereit",
+      message: `Bible Presenter ${info.version} wurde heruntergeladen.`,
+      detail: "Die Präsentation bleibt geöffnet, bis du den Neustart bestätigst.",
+      buttons: ["Neu starten und installieren", "Später"],
+      defaultId: 0,
+      cancelId: 1
+    })
+    if (result.response === 0) autoUpdater.quitAndInstall()
+  })
+  autoUpdater.on("error", (error) => {
+    // An unreachable update server must never interrupt a presentation.
+    console.warn("Update check failed:", error.message)
+  })
+  autoUpdater.checkForUpdates().catch(() => {})
+}
+
 app.whenReady().then(() => {
   createControlWindow()
+  configureUpdates()
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createControlWindow()

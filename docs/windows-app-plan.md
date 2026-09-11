@@ -30,13 +30,13 @@ Die neue Anwendung erhält eine eigene Windows-App-ID (`de.gwinnmedia.bibleprese
 
 **Ergebnis:** Bereits verwendete Stellen starten schnell und bleiben ohne Netz verfügbar. Fenstergröße, letzte Bibelstelle, Übersetzung und bevorzugter Ausgabebildschirm werden separat im Bible-Presenter-Datenordner gespeichert.
 
-## Phase 4 – Windows-Installer und Updates
+## Phase 4 – Windows-Installer und Updates ✓
 
 - Einen separaten `.exe`-Installer erzeugen.
 - Eigenen Startmenü-Eintrag, Desktop-Symbol und Deinstallations-Eintrag anlegen.
 - Update-Kanal konfigurieren, ohne die Web-App oder ChurchPresenter zu beeinflussen.
 
-**Ergebnis:** Sauber installierbare Windows-Anwendung.
+**Ergebnis:** Sauber installierbare Windows-Anwendung. Der NSIS-Installer verwendet eine eigene App-ID und eigene Startmenü-, Desktop- und Deinstallations-Einträge. Updates kommen aus den GitHub-Releases dieses Repositorys und benötigen vor Download und Installation jeweils eine ausdrückliche Bestätigung.
 
 ## Phase 5 – Abnahme auf Windows-Hardware
 
