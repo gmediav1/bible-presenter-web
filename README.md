@@ -26,7 +26,7 @@ npm install
 npm run package:win
 ```
 
-Der Installer liegt danach unter `release/Bible-Presenter-Setup-<Version>.exe`. Er wird unabhängig von ChurchPresenter installiert. Für Updates werden die Release-Dateien dieses GitHub-Repositorys verwendet; die App fragt vor Download und Installation nach.
+Der Installer liegt danach unter `release/Bible-Presenter-Setup-<Version>.exe`. Er wird unabhängig von ChurchPresenter installiert. Für Updates werden die Release-Dateien dieses GitHub-Repositorys verwendet; die App fragt vor Download und Installation nach. Die veröffentlichte Windows-Version ist über die [GitHub Releases](https://github.com/gmediav1/bible-presenter-web/releases) verfügbar.
 
 ## Lokaler Start
 

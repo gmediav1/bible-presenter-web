@@ -29,7 +29,7 @@ input:focus, select:focus { border-color:#b6cc68; box-shadow:0 0 0 3px rgb(182 2
 .translation-code { font-weight:800; color:#b6cc68; font-size:12px; }
 .license { color:#d6d5bc; font-size:10px; letter-spacing:.04em; }
 footer { display:flex; justify-content:space-between; color:#858b82; font-size:11px; }
-.output-controls { display:grid; gap:7px; }.output-controls p { margin:0; color:#858b82; font-size:11px; line-height:1.4; }.output-button { width:100%; min-height:42px; }.display-label { margin:7px 0 -2px; }
+.output-controls { display:grid; gap:7px; }.output-controls p { margin:0; color:#858b82; font-size:11px; line-height:1.4; }.output-button, .download-button { width:100%; min-height:42px; }.download-button { display:flex; align-items:center; justify-content:center; border:1px solid #596052; border-radius:8px; padding:0 14px; color:#e8edda; background:#20251f; font-size:13px; font-weight:700; text-align:center; text-decoration:none; }.download-button:hover { background:#2a3127; border-color:#b6cc68; }.download-note { text-align:center; }.display-label { margin:7px 0 -2px; }
 .status { color:#b9bdb4; }.status.ready { color:#b6cc68; }
 .stage-wrap { min-width:0; padding:20px; display:grid; grid-template-rows:auto minmax(0, 1fr) auto auto; gap:12px; background:radial-gradient(circle at 75% 18%, #252a22 0, #101211 48%); }
 .stage-toolbar { display:flex; align-items:center; justify-content:space-between; color:#afb5aa; font-size:13px; }.stage-toolbar button { padding:9px 13px; }
