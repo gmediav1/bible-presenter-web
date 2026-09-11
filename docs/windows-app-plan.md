@@ -4,7 +4,7 @@
 
 Die neue Anwendung erhält eine eigene Windows-App-ID (`de.gwinnmedia.biblepresenter`) und verwendet ausschließlich ihren eigenen Datenordner `%APPDATA%/Bible Presenter`. Sie liest, ändert oder löscht keine Dateien, Einstellungen, Caches oder Installationsdaten von ChurchPresenter.
 
-## Phase 1 – Desktop-Grundlage
+## Phase 1 – Desktop-Grundlage ✓
 
 - Electron in dieses Repository integrieren.
 - Ein separates Steuerfenster mit der bestehenden Web-Oberfläche starten.
@@ -13,14 +13,14 @@ Die neue Anwendung erhält eine eigene Windows-App-ID (`de.gwinnmedia.bibleprese
 
 **Ergebnis:** Die Bible-Presenter-Oberfläche startet als eigenständige Desktop-Anwendung, ohne ChurchPresenter zu berühren.
 
-## Phase 2 – Präsentationsfenster und zweiter Bildschirm
+## Phase 2 – Präsentationsfenster und zweiter Bildschirm ✓
 
 - Ein echtes Ausgabefenster statt eines Browser-Pop-ups erstellen.
 - Angeschlossene Bildschirme erkennen.
 - Ausgabe bevorzugt auf Bildschirm 2 öffnen, randlos und im Vollbild.
 - Bibelstelle, Übersetzung und Design sofort zwischen Steuerung und Ausgabe synchronisieren.
 
-**Ergebnis:** Ein Programm mit zwei synchronisierten Fenstern, nicht zwei installierte Apps.
+**Ergebnis:** Ein Programm mit zwei synchronisierten Fenstern, nicht zwei installierte Apps. Das Steuerfenster übergibt den Zustand direkt an Electron; die Ausgabe startet auf dem zweiten Bildschirm im Vollbild. Ohne zweiten Bildschirm öffnet sich eine normale Ausgabe, damit die Steuerung sichtbar bleibt.
 
 ## Phase 3 – Lokaler Cache und Einstellungen
 

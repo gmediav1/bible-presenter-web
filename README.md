@@ -8,6 +8,17 @@ Die Bibelstellen-Suche erkennt die englischen und deutschen Kürzel der lokalen 
 
 Einmal geladene Stellen werden pro Übersetzung bis zu 30 Tage lokal im Browser gespeichert. Das Ausgabefenster synchronisiert sich laufend mit dem Bedienfenster und ist bei längeren Abschnitten scrollbar.
 
+## Desktop-Version
+
+Die Electron-Version ist eine getrennte Anwendung namens **Bible Presenter**. Sie verwendet ihren eigenen Datenordner und greift nicht auf ChurchPresenter zu. Mit angeschlossenem zweiten Bildschirm öffnet **Ausgabe auf Bildschirm 2 öffnen** eine randlose Vollbild-Ausgabe direkt auf diesem Bildschirm. Ohne zweiten Bildschirm erscheint die Ausgabe als normales zweites Fenster.
+
+```bash
+npm install
+npm run desktop:start
+```
+
+Die Desktop-App verwendet für Bibeltexte weiterhin die Netlify-Schnittstelle. Dadurch bleiben YouVersion-Zugangsdaten ausschließlich auf dem Server.
+
 ## Lokaler Start
 
 ```bash

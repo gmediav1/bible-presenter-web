@@ -15,7 +15,8 @@ const translations = [
 
 const app = document.querySelector("#app")
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("bible-presenter-live-v1") : null
-const isOutputWindow = location.pathname.startsWith("/output")
+const desktop = window.biblePresenterDesktop || null
+const isOutputWindow = location.pathname.startsWith("/output") || new URLSearchParams(location.search).has("output")
 const defaultState = { reference: "John 3:16", translation: "nlt", verses: [], title: "", copyright: "", loading: false, error: "" }
 const savedState = readSavedState()
 let current = savedState?.translation === "niv" && !savedState.verses?.length
@@ -30,7 +31,8 @@ if (isOutputWindow) {
   document.title = "Bible Presenter - Ausgabe"
   document.body.classList.add("output-mode")
   renderOutput()
-  channel?.postMessage({ type: "request-state" })
+  if (desktop) desktop.getPresentationState().then(applyOutputState)
+  else channel?.postMessage({ type: "request-state" })
   window.addEventListener("focus", syncOutputFromStorage)
   window.addEventListener("pageshow", syncOutputFromStorage)
   setInterval(syncOutputFromStorage, 1000)
@@ -41,6 +43,8 @@ if (isOutputWindow) {
   })
   render()
 }
+
+if (isOutputWindow && desktop) desktop.onPresentationState(applyOutputState)
 
 window.addEventListener("storage", (event) => {
   if (!isOutputWindow || event.key !== "bible-presenter-live" || !event.newValue) return
@@ -91,8 +95,8 @@ function render() {
           </div>
         </section>
         <div class="output-controls">
-          <button id="open-output" class="output-button" type="button">Ausgabefenster öffnen</button>
-          <p>Danach das Fenster auf Bildschirm 2 in Vollbild setzen.</p>
+          <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
+          <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
         </div>
         <footer><span>8 Übersetzungen eingerichtet</span><span class="status ${current.verses.length ? "ready" : ""}">${current.verses.length ? "Live bereit" : "Bereit"}</span></footer>
       </aside>
@@ -214,9 +218,11 @@ async function loadPassage(event) {
   render()
   try {
     const params = new URLSearchParams({ reference: current.reference, translation: current.translation })
-    const response = await fetch(`/api/bible?${params}`)
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || "Die Bibelstelle konnte nicht geladen werden.")
+    const result = desktop
+      ? await desktop.loadPassage({ reference: current.reference, translation: current.translation })
+      : await fetch(`/api/bible?${params}`).then(async (response) => ({ ok: response.ok, payload: await response.json() }))
+    const payload = result.payload
+    if (!result.ok) throw new Error(payload.error || "Die Bibelstelle konnte nicht geladen werden.")
     cachePassage(localStorage, current.translation, current.reference, payload)
     current = { ...current, ...payload, loading: false, error: "" }
   } catch (error) {
@@ -235,11 +241,20 @@ async function toggleFullscreen() {
 }
 
 async function toggleOutputFullscreen() {
+  if (desktop) {
+    await desktop.toggleOutputFullscreen()
+    return
+  }
   if (document.fullscreenElement) await document.exitFullscreen()
   else await document.documentElement.requestFullscreen()
 }
 
 async function openOutput() {
+  if (desktop) {
+    await desktop.openOutput()
+    publishState()
+    return
+  }
   outputWindow = window.open("/output", "BiblePresenterOutput", "popup=yes,width=1280,height=720")
   if (!outputWindow) {
     current.error = "Das Ausgabefenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben."
@@ -267,6 +282,7 @@ async function openOutput() {
 function publishState() {
   const state = { ...current, loading: false }
   localStorage.setItem("bible-presenter-live", JSON.stringify(state))
+  desktop?.sendPresentationState(state)
   channel?.postMessage({ type: "state", state })
   if (outputWindow && !outputWindow.closed) outputWindow.postMessage({ type: "state", state }, location.origin)
 }
