@@ -5,6 +5,7 @@ import { cachePassage, readCachedPassage } from "./passage-cache.js"
 const translations = [
   { id: "amp", short: "AMP", name: "Amplified Bible", licensed: true },
   { id: "niv", short: "NIV", name: "New International Version", licensed: true },
+  { id: "nlt", short: "NLT", name: "New Living Translation", licensed: true },
   { id: "kjv", short: "KJV", name: "King James Version" },
   { id: "asv", short: "ASV", name: "American Standard Version" },
   { id: "web", short: "WEB", name: "World English Bible" },
@@ -15,8 +16,11 @@ const translations = [
 const app = document.querySelector("#app")
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("bible-presenter-live-v1") : null
 const isOutputWindow = location.pathname.startsWith("/output")
-const defaultState = { reference: "John 3:16", translation: "niv", verses: [], title: "", copyright: "", loading: false, error: "" }
-let current = readSavedState() || defaultState
+const defaultState = { reference: "John 3:16", translation: "nlt", verses: [], title: "", copyright: "", loading: false, error: "" }
+const savedState = readSavedState()
+let current = savedState?.translation === "niv" && !savedState.verses?.length
+  ? { ...savedState, translation: "nlt" }
+  : savedState || defaultState
 let outputWindow = null
 let referenceSuggestions = []
 let activeSuggestion = -1
@@ -90,7 +94,7 @@ function render() {
           <button id="open-output" class="output-button" type="button">Ausgabefenster öffnen</button>
           <p>Danach das Fenster auf Bildschirm 2 in Vollbild setzen.</p>
         </div>
-        <footer><span>7 Übersetzungen eingerichtet</span><span class="status ${current.verses.length ? "ready" : ""}">${current.verses.length ? "Live bereit" : "Bereit"}</span></footer>
+        <footer><span>8 Übersetzungen eingerichtet</span><span class="status ${current.verses.length ? "ready" : ""}">${current.verses.length ? "Live bereit" : "Bereit"}</span></footer>
       </aside>
       <section class="stage-wrap">
         <div class="stage-toolbar"><span>${selected.short} - ${selected.name}</span><button id="fullscreen" type="button">Vollbild</button></div>

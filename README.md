@@ -1,6 +1,6 @@
 # Bible Presenter Web
 
-Eine schlanke Präsentations-Webapp für die sieben Übersetzungen aus ChurchPresenter.
+Eine schlanke Präsentations-Webapp für die acht Übersetzungen aus ChurchPresenter.
 
 Über **Ausgabefenster öffnen** wird eine getrennte, live synchronisierte Ausgabe für einen zweiten Bildschirm gestartet. Die Vollbild-Schaltfläche befindet sich direkt im Ausgabefenster.
 
