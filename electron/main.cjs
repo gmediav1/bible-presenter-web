@@ -5,7 +5,7 @@ const { createPersistence } = require("./persistence.cjs")
 
 const APP_NAME = "Bible Presenter"
 const APP_ID = "de.gwinnmedia.biblepresenter"
-const BIBLE_SERVICE_URL = process.env.BIBLE_PRESENTER_API_ORIGIN || "https://bible-presenter-web.netlify.app"
+const BIBLE_SERVICE_URL = process.env.BIBLE_PRESENTER_API_ORIGIN || "https://bible-presenter-y7bk.netlify.app"
 const TRANSLATIONS = new Set(["amp", "niv", "nlt", "kjv", "asv", "web", "wmb", "bsb"])
 let controlWindow
 let outputWindow

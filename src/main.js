@@ -99,7 +99,7 @@ function render() {
         <div class="output-controls">
           <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
           <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
-          ${!desktop ? '<a class="download-button" href="https://github.com/gmediav1/bible-presenter-web/releases/download/v1.0.0/Bible-Presenter-Setup-1.0.0.exe" target="_blank" rel="noopener">Windows-App herunterladen</a><p class="download-note">Windows 10/11 · eigener Installer · ca. 104 MB</p>' : ""}
+          ${!desktop ? '<a class="download-button" href="https://github.com/gmediav1/bible-presenter-web/releases/download/v1.0.1/Bible-Presenter-Setup-1.0.1.exe" target="_blank" rel="noopener">Windows-App herunterladen</a><p class="download-note">Windows 10/11 · eigener Installer · ca. 90 MB</p>' : ""}
           ${desktop ? `<label class="display-label" for="output-display">Ausgabebildschirm</label><select id="output-display"><option value="">Automatisch: zweiter Bildschirm</option>${desktopSettings.displays.map((display) => `<option value="${escapeAttr(display.id)}" ${display.id === desktopSettings.preferredOutputDisplayId ? "selected" : ""}>${escapeHtml(display.label)}</option>`).join("")}</select>` : ""}
         </div>
         <footer><span>8 Übersetzungen eingerichtet</span><span class="status ${current.verses.length ? "ready" : ""}">${current.verses.length ? "Live bereit" : "Bereit"}</span></footer>
