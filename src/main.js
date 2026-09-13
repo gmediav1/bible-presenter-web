@@ -89,6 +89,10 @@ function render() {
               <button class="show-button" type="submit">Anzeigen</button>
             </div>
             <div class="chapter-navigation" aria-label="Kapitel wechseln"><button id="previous-chapter" type="button" title="Vorheriges Kapitel" aria-label="Vorheriges Kapitel">←</button><button id="next-chapter" type="button" title="Nächstes Kapitel" aria-label="Nächstes Kapitel">→</button></div>
+            <div class="inline-keypad" aria-label="Zahlen und Zeichen einfügen">
+              ${["1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "0", "-"].map((key) => `<button type="button" data-reference-key="${key}" data-reference-target="reference" aria-label="${key} einfügen">${key}</button>`).join("")}
+              <button class="keypad-delete" type="button" data-reference-key="backspace" data-reference-target="reference" aria-label="Letztes Zeichen löschen">⌫</button>
+            </div>
             <div id="reference-suggestions" class="reference-suggestions" role="listbox" hidden></div>
           </div>
           <p class="help">Kürzel funktionieren: Mat, Ps, Joh, 1 Kor …</p>
@@ -117,6 +121,7 @@ function render() {
         <div class="output-controls">
           <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
           <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
+          ${desktop ? '<button id="check-updates" class="secondary-button" type="button">Nach Updates suchen</button>' : ""}
           ${!desktop ? '<a class="download-button" href="https://github.com/gmediav1/bible-presenter-web/releases/download/v1.0.1/Bible-Presenter-Setup-1.0.1.exe" target="_blank" rel="noopener">Windows-App herunterladen</a><p class="download-note">Windows 10/11 · eigener Installer · ca. 90 MB</p><a class="repair-link" href="https://github.com/gmediav1/bible-presenter-web/releases/download/v1.0.1/Repariere-Bible-Presenter.ps1" target="_blank" rel="noopener">Alte Installation reparieren</a>' : ""}
           ${desktop ? `<label class="display-label" for="output-display">Ausgabebildschirm</label><select id="output-display"><option value="">Automatisch: zweiter Bildschirm</option>${desktopSettings.displays.map((display) => `<option value="${escapeAttr(display.id)}" ${display.id === desktopSettings.preferredOutputDisplayId ? "selected" : ""}>${escapeHtml(display.label)}</option>`).join("")}</select>` : ""}
         </div>
@@ -136,8 +141,8 @@ function render() {
             <button class="show-button" type="submit">Anzeigen</button>
           </div>
           <div class="reference-keypad" aria-label="Zahlen und Zeichen einfügen">
-            ${["1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "0", "-"].map((key) => `<button type="button" data-reference-key="${key}" aria-label="${key} einfügen">${key}</button>`).join("")}
-            <button class="keypad-delete" type="button" data-reference-key="backspace" aria-label="Letztes Zeichen löschen">⌫</button>
+            ${["1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "0", "-"].map((key) => `<button type="button" data-reference-key="${key}" data-reference-target="quick-reference" aria-label="${key} einfügen">${key}</button>`).join("")}
+            <button class="keypad-delete" type="button" data-reference-key="backspace" data-reference-target="quick-reference" aria-label="Letztes Zeichen löschen">⌫</button>
           </div>
         </form>
         ${current.error ? `<div class="error" role="alert">${escapeHtml(current.error)}</div>` : ""}
@@ -152,7 +157,7 @@ function render() {
   referenceInput.addEventListener("keydown", handleReferenceKeys)
   referenceInput.addEventListener("blur", () => setTimeout(closeReferenceSuggestions, 120))
   document.querySelector("#quick-reference").addEventListener("input", updateQuickReference)
-  document.querySelectorAll("[data-reference-key]").forEach((button) => button.addEventListener("click", () => insertReferenceKey(button.dataset.referenceKey)))
+  document.querySelectorAll("[data-reference-key]").forEach((button) => button.addEventListener("click", () => insertReferenceKey(button.dataset.referenceKey, button.dataset.referenceTarget)))
   document.querySelectorAll("[data-translation]").forEach((button) => button.addEventListener("click", () => {
     current.translation = button.dataset.translation
     current.error = ""
@@ -161,9 +166,13 @@ function render() {
   }))
   document.querySelector("#fullscreen").addEventListener("click", toggleFullscreen)
   document.querySelector("#open-output").addEventListener("click", openOutput)
+  document.querySelector("#check-updates")?.addEventListener("click", checkForUpdates)
   document.querySelector("#previous-chapter").addEventListener("click", () => shiftChapter(-1))
   document.querySelector("#next-chapter").addEventListener("click", () => shiftChapter(1))
   document.querySelector(".stage").addEventListener("scroll", syncOutputScroll, { passive: true })
+  document.querySelector(".stage").addEventListener("wheel", (event) => {
+    if (event.deltaY > 0) setQuickReferenceVisible(true)
+  }, { passive: true })
   wirePresentationSettings()
   applyPresentationStyle(document.querySelector(".stage"), current.presentation)
   document.querySelector("#output-display")?.addEventListener("change", async (event) => {
@@ -201,8 +210,8 @@ function syncReferenceFields(value, sourceId) {
   })
 }
 
-function insertReferenceKey(key) {
-  const field = document.querySelector("#quick-reference")
+function insertReferenceKey(key, targetId = "reference") {
+  const field = document.querySelector(`#${targetId}`)
   if (!field) return
   const start = field.selectionStart ?? field.value.length
   const end = field.selectionEnd ?? field.value.length
@@ -211,8 +220,22 @@ function insertReferenceKey(key) {
   const nextEnd = end
   field.setRangeText(replacement, nextStart, nextEnd, "end")
   current.reference = field.value
-  syncReferenceFields(current.reference, "quick-reference")
+  syncReferenceFields(current.reference, targetId)
   field.focus()
+}
+
+async function checkForUpdates(event) {
+  const button = event.currentTarget
+  button.disabled = true
+  button.textContent = "Suche nach Updates …"
+  try {
+    const result = await desktop.checkForUpdates()
+    if (!result?.ok) throw new Error(result?.error || "Die Update-Suche ist nicht verfügbar.")
+    button.textContent = "Update-Suche gestartet"
+  } catch (error) {
+    button.textContent = error.message || "Update-Suche fehlgeschlagen"
+  }
+  setTimeout(() => { if (document.contains(button)) { button.disabled = false; button.textContent = "Nach Updates suchen" } }, 2500)
 }
 
 function paintReferenceSuggestions() {
@@ -388,13 +411,17 @@ function applyPresentationStyle(element, presentation) {
 
 function syncOutputScroll(event) {
   const source = event.currentTarget
-  document.querySelector("#quick-reference-form")?.classList.toggle("visible", source.scrollTop > 72)
+  setQuickReferenceVisible(source.scrollTop > 72)
   const maximum = source.scrollHeight - source.clientHeight
   if (maximum <= 0) return
   const position = source.scrollTop / maximum
   desktop?.sendPresentationScroll(position)
   channel?.postMessage({ type: "scroll", position })
   if (outputWindow && !outputWindow.closed) outputWindow.postMessage({ type: "scroll", position }, location.origin)
+}
+
+function setQuickReferenceVisible(visible) {
+  document.querySelector("#quick-reference-form")?.classList.toggle("visible", visible)
 }
 
 function applyOutputScroll(position) {

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("biblePresenterDesktop", {
   },
   toggleOutputFullscreen: () => ipcRenderer.invoke("presentation:toggle-output-fullscreen"),
   loadPassage: (request) => ipcRenderer.invoke("bible:load", request),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   setOutputDisplay: (displayId) => ipcRenderer.invoke("settings:set-output-display", displayId),
   saveControlPreferences: (preferences) => ipcRenderer.send("settings:save-control-preferences", preferences)

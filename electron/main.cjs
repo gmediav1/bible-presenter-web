@@ -11,6 +11,7 @@ let controlWindow
 let outputWindow
 let presentationState
 let updatePromptOpen = false
+let manualUpdateCheck = false
 
 // This intentionally differs from ChurchPresenter. Electron uses this folder
 // for settings, cookies and cached Bible passages on Windows and macOS.
@@ -189,6 +190,7 @@ function configureUpdates() {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.on("update-available", async (info) => {
+    manualUpdateCheck = false
     if (updatePromptOpen || !controlWindow) return
     updatePromptOpen = true
     const result = await dialog.showMessageBox(controlWindow, {
@@ -202,6 +204,16 @@ function configureUpdates() {
     })
     updatePromptOpen = false
     if (result.response === 0) autoUpdater.downloadUpdate().catch(() => {})
+  })
+  autoUpdater.on("update-not-available", async () => {
+    if (!manualUpdateCheck || !controlWindow) return
+    manualUpdateCheck = false
+    await dialog.showMessageBox(controlWindow, {
+      type: "info",
+      title: "Bible Presenter ist aktuell",
+      message: "Es ist kein neues Update verfügbar.",
+      buttons: ["OK"]
+    })
   })
   autoUpdater.on("update-downloaded", async (info) => {
     if (!controlWindow) return
@@ -219,9 +231,32 @@ function configureUpdates() {
   autoUpdater.on("error", (error) => {
     // An unreachable update server must never interrupt a presentation.
     console.warn("Update check failed:", error.message)
+    if (manualUpdateCheck && controlWindow) {
+      manualUpdateCheck = false
+      dialog.showMessageBox(controlWindow, {
+        type: "error",
+        title: "Update-Suche fehlgeschlagen",
+        message: "Die Suche nach Updates konnte gerade nicht abgeschlossen werden.",
+        detail: error.message,
+        buttons: ["OK"]
+      }).catch(() => {})
+    }
   })
   autoUpdater.checkForUpdates().catch(() => {})
 }
+
+ipcMain.handle("updates:check", async (event) => {
+  if (event.sender !== controlWindow?.webContents) return { ok: false, error: "Ungültige Update-Anfrage." }
+  if (!app.isPackaged) return { ok: false, error: "Updates sind nur in der installierten App verfügbar." }
+  manualUpdateCheck = true
+  try {
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
+  } catch (error) {
+    manualUpdateCheck = false
+    return { ok: false, error: error?.message || "Update-Suche fehlgeschlagen." }
+  }
+})
 
 app.whenReady().then(() => {
   createControlWindow()

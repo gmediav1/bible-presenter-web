@@ -1,6 +1,6 @@
 {
   "name": "bible-presenter-web",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Bible presentation software with synchronized second-screen output.",
   "author": "Gwinn Media",
   "private": true,
