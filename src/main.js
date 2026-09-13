@@ -130,16 +130,29 @@ function render() {
           </div>
           <div class="stage-footer"><span>${escapeHtml(current.title || current.reference)}</span><span>${selected.short}</span></div>
         </article>
+        <form id="quick-reference-form" class="quick-reference-bar" aria-label="Schnelle Bibelstelleneingabe">
+          <div class="quick-reference-row">
+            <input id="quick-reference" value="${escapeAttr(current.reference)}" autocomplete="off" spellcheck="false" placeholder="Bibelstelle" aria-label="Bibelstelle schnell eingeben" />
+            <button class="show-button" type="submit">Anzeigen</button>
+          </div>
+          <div class="reference-keypad" aria-label="Zahlen und Zeichen einfügen">
+            ${["1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "0", "-"].map((key) => `<button type="button" data-reference-key="${key}" aria-label="${key} einfügen">${key}</button>`).join("")}
+            <button class="keypad-delete" type="button" data-reference-key="backspace" aria-label="Letztes Zeichen löschen">⌫</button>
+          </div>
+        </form>
         ${current.error ? `<div class="error" role="alert">${escapeHtml(current.error)}</div>` : ""}
         ${current.copyright ? `<p class="copyright">${escapeHtml(current.copyright)}</p>` : ""}
       </section>
     </section>`
 
   document.querySelector("#reference-form").addEventListener("submit", loadPassage)
+  document.querySelector("#quick-reference-form").addEventListener("submit", loadPassage)
   const referenceInput = document.querySelector("#reference")
   referenceInput.addEventListener("input", updateReferenceSuggestions)
   referenceInput.addEventListener("keydown", handleReferenceKeys)
   referenceInput.addEventListener("blur", () => setTimeout(closeReferenceSuggestions, 120))
+  document.querySelector("#quick-reference").addEventListener("input", updateQuickReference)
+  document.querySelectorAll("[data-reference-key]").forEach((button) => button.addEventListener("click", () => insertReferenceKey(button.dataset.referenceKey)))
   document.querySelectorAll("[data-translation]").forEach((button) => button.addEventListener("click", () => {
     current.translation = button.dataset.translation
     current.error = ""
@@ -171,9 +184,35 @@ function applyDesktopSettings(settings) {
 
 function updateReferenceSuggestions(event) {
   current.reference = event.currentTarget.value
+  syncReferenceFields(current.reference, "reference")
   referenceSuggestions = suggestBibleBooks(current.reference)
   activeSuggestion = referenceSuggestions.length ? 0 : -1
   paintReferenceSuggestions()
+}
+
+function updateQuickReference(event) {
+  current.reference = event.currentTarget.value
+  syncReferenceFields(current.reference, "quick-reference")
+}
+
+function syncReferenceFields(value, sourceId) {
+  document.querySelectorAll("#reference, #quick-reference").forEach((field) => {
+    if (field.id !== sourceId) field.value = value
+  })
+}
+
+function insertReferenceKey(key) {
+  const field = document.querySelector("#quick-reference")
+  if (!field) return
+  const start = field.selectionStart ?? field.value.length
+  const end = field.selectionEnd ?? field.value.length
+  const replacement = key === "backspace" ? "" : key
+  const nextStart = key === "backspace" && start === end ? Math.max(0, start - 1) : start
+  const nextEnd = end
+  field.setRangeText(replacement, nextStart, nextEnd, "end")
+  current.reference = field.value
+  syncReferenceFields(current.reference, "quick-reference")
+  field.focus()
 }
 
 function paintReferenceSuggestions() {
@@ -200,6 +239,7 @@ function selectReferenceSuggestion(index) {
   if (!suggestion || !field) return
   current.reference = suggestion.reference
   field.value = suggestion.reference
+  syncReferenceFields(current.reference, "reference")
   closeReferenceSuggestions()
   field.focus()
 }
@@ -267,6 +307,7 @@ function shiftChapter(direction) {
   const nextReference = `${match[1]}${chapter}${match[3]}`
   current.reference = nextReference
   field.value = nextReference
+  syncReferenceFields(nextReference, "reference")
   loadPassage()
 }
 
@@ -347,6 +388,7 @@ function applyPresentationStyle(element, presentation) {
 
 function syncOutputScroll(event) {
   const source = event.currentTarget
+  document.querySelector("#quick-reference-form")?.classList.toggle("visible", source.scrollTop > 72)
   const maximum = source.scrollHeight - source.clientHeight
   if (maximum <= 0) return
   const position = source.scrollTop / maximum
@@ -365,8 +407,9 @@ function applyOutputScroll(position) {
 
 async function loadPassage(event) {
   event?.preventDefault()
-  const field = document.querySelector("#reference")
+  const field = event?.currentTarget?.querySelector("input") || document.querySelector("#reference")
   current.reference = field?.value.trim() || current.reference
+  syncReferenceFields(current.reference, field?.id)
   const cached = readCachedPassage(localStorage, current.translation, current.reference)
   if (cached) {
     current = { ...current, ...cached, loading: false, error: "" }
