@@ -71,7 +71,7 @@ window.addEventListener("message", (event) => {
 
 function render() {
   const selected = translations.find((translation) => translation.id === current.translation)
-  const verseMarkup = current.loading
+  const passageMarkup = current.loading
     ? `<div class="skeleton reference-skeleton"></div><div class="skeleton verse-skeleton"></div><div class="skeleton verse-skeleton short"></div>`
     : current.verses.length
       ? current.verses.map((verse) => verseMarkup(verse)).join("")
@@ -126,7 +126,7 @@ function render() {
         <div class="stage-toolbar"><span>${selected.short} - ${selected.name}</span><button id="fullscreen" type="button">Vollbild</button></div>
         <article class="stage" aria-live="polite">
           <div class="stage-content">
-            ${verseMarkup}
+            ${passageMarkup}
           </div>
           <div class="stage-footer"><span>${escapeHtml(current.title || current.reference)}</span><span>${selected.short}</span></div>
         </article>
@@ -270,14 +270,14 @@ function handleReferenceKeys(event) {
 
 function renderOutput() {
   const selected = translations.find((translation) => translation.id === current.translation) || translations[0]
-  const verseMarkup = current.verses.length
+  const passageMarkup = current.verses.length
     ? current.verses.map((verse) => verseMarkup(verse)).join("")
     : `<div class="empty"><p>Ausgabe verbunden.</p><span>Wähle im Bedienfenster eine Bibelstelle.</span></div>`
 
   app.innerHTML = `
     <main class="output-stage" aria-live="polite">
       <button id="output-fullscreen" class="output-fullscreen" type="button">Vollbild starten</button>
-      <div class="stage-content">${verseMarkup}</div>
+      <div class="stage-content">${passageMarkup}</div>
       <div class="stage-footer"><span>${escapeHtml(current.title || current.reference)}</span><span>${selected.short}</span></div>
     </main>`
   document.querySelector("#output-fullscreen").addEventListener("click", toggleOutputFullscreen)
