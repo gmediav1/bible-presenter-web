@@ -97,15 +97,6 @@ function render() {
           </div>
           <p class="help">Kürzel funktionieren: Mat, Ps, Joh, 1 Kor …</p>
         </form>
-        <section class="translation-section" aria-labelledby="translation-heading">
-          <h2 id="translation-heading">Übersetzung</h2>
-          <div class="translation-list">
-            ${translations.map((translation) => `
-              <button class="translation ${translation.id === current.translation ? "selected" : ""}" data-translation="${translation.id}" type="button" aria-pressed="${translation.id === current.translation}">
-                <span class="translation-code">${translation.short}</span><span>${translation.name}</span>${translation.licensed ? '<span class="license" title="Lizenzierte Übersetzung">Lizenz</span>' : ""}
-              </button>`).join("")}
-          </div>
-        </section>
         <details class="appearance-settings">
           <summary>Darstellung der Ausgabe</summary>
           <div class="appearance-fields">
@@ -118,6 +109,15 @@ function render() {
             <p id="background-image-status" class="appearance-note">${current.presentation.backgroundImage ? "Eigenes Hintergrundbild aktiv." : "PNG, JPG oder WebP · wird lokal gespeichert."}</p>
           </div>
         </details>
+        <section class="translation-section" aria-labelledby="translation-heading">
+          <h2 id="translation-heading">Übersetzung</h2>
+          <div class="translation-list">
+            ${translations.map((translation) => `
+              <button class="translation ${translation.id === current.translation ? "selected" : ""}" data-translation="${translation.id}" type="button" aria-pressed="${translation.id === current.translation}">
+                <span class="translation-code">${translation.short}</span><span>${translation.name}</span>${translation.licensed ? '<span class="license" title="Lizenzierte Übersetzung">Lizenz</span>' : ""}
+              </button>`).join("")}
+          </div>
+        </section>
         <div class="output-controls">
           <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
           <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
@@ -157,7 +157,10 @@ function render() {
   referenceInput.addEventListener("keydown", handleReferenceKeys)
   referenceInput.addEventListener("blur", () => setTimeout(closeReferenceSuggestions, 120))
   document.querySelector("#quick-reference").addEventListener("input", updateQuickReference)
-  document.querySelectorAll("[data-reference-key]").forEach((button) => button.addEventListener("click", () => insertReferenceKey(button.dataset.referenceKey, button.dataset.referenceTarget)))
+  document.querySelectorAll("[data-reference-key]").forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault())
+    button.addEventListener("click", () => insertReferenceKey(button.dataset.referenceKey, button.dataset.referenceTarget))
+  })
   document.querySelectorAll("[data-translation]").forEach((button) => button.addEventListener("click", () => {
     current.translation = button.dataset.translation
     current.error = ""
@@ -194,6 +197,10 @@ function applyDesktopSettings(settings) {
 function updateReferenceSuggestions(event) {
   current.reference = event.currentTarget.value
   syncReferenceFields(current.reference, "reference")
+  refreshReferenceSuggestions()
+}
+
+function refreshReferenceSuggestions() {
   referenceSuggestions = suggestBibleBooks(current.reference)
   activeSuggestion = referenceSuggestions.length ? 0 : -1
   paintReferenceSuggestions()
@@ -221,6 +228,7 @@ function insertReferenceKey(key, targetId = "reference") {
   field.setRangeText(replacement, nextStart, nextEnd, "end")
   current.reference = field.value
   syncReferenceFields(current.reference, targetId)
+  refreshReferenceSuggestions()
   field.focus()
 }
 
