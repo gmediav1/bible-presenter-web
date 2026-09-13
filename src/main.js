@@ -17,11 +17,13 @@ const app = document.querySelector("#app")
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("bible-presenter-live-v1") : null
 const desktop = window.biblePresenterDesktop || null
 const isOutputWindow = location.pathname.startsWith("/output") || new URLSearchParams(location.search).has("output")
-const defaultState = { reference: "John 3:16", translation: "nlt", verses: [], title: "", copyright: "", loading: false, error: "" }
+const defaultPresentation = { backgroundColor: "#151815", textColor: "#f9f6ed", verseNumberColor: "#c8df78", verseNumberScale: 1, backgroundImage: "" }
+const defaultState = { reference: "John 3:16", translation: "nlt", verses: [], title: "", copyright: "", loading: false, error: "", presentation: defaultPresentation }
 const savedState = readSavedState()
 let current = savedState?.translation === "niv" && !savedState.verses?.length
   ? { ...savedState, translation: "nlt" }
   : savedState || defaultState
+current.presentation = normalizePresentation(current.presentation)
 let outputWindow = null
 let referenceSuggestions = []
 let activeSuggestion = -1
@@ -47,6 +49,7 @@ if (isOutputWindow) {
 }
 
 if (isOutputWindow && desktop) desktop.onPresentationState(applyOutputState)
+if (isOutputWindow && desktop) desktop.onPresentationScroll(applyOutputScroll)
 
 window.addEventListener("storage", (event) => {
   if (!isOutputWindow || event.key !== "bible-presenter-live" || !event.newValue) return
@@ -54,13 +57,15 @@ window.addEventListener("storage", (event) => {
 })
 
 channel?.addEventListener("message", (event) => {
-  if (!isOutputWindow || event.data?.type !== "state") return
-  applyOutputState(event.data.state)
+  if (!isOutputWindow) return
+  if (event.data?.type === "state") applyOutputState(event.data.state)
+  if (event.data?.type === "scroll") applyOutputScroll(event.data.position)
 })
 
 window.addEventListener("message", (event) => {
   if (event.origin !== location.origin) return
   if (isOutputWindow && event.data?.type === "state") applyOutputState(event.data.state)
+  if (isOutputWindow && event.data?.type === "scroll") applyOutputScroll(event.data.position)
   if (!isOutputWindow && event.data?.type === "request-state") publishState()
 })
 
@@ -69,7 +74,7 @@ function render() {
   const verseMarkup = current.loading
     ? `<div class="skeleton reference-skeleton"></div><div class="skeleton verse-skeleton"></div><div class="skeleton verse-skeleton short"></div>`
     : current.verses.length
-      ? current.verses.map((verse) => `<p class="verse"><sup>${verse.number}</sup>${escapeHtml(verse.text)}</p>`).join("")
+      ? current.verses.map((verse) => verseMarkup(verse)).join("")
       : `<div class="empty"><p>Stelle eingeben und anzeigen.</p><span>Zum Beispiel: John 3:16-18</span></div>`
 
   app.innerHTML = `
@@ -83,6 +88,7 @@ function render() {
               <input id="reference" name="reference" value="${escapeAttr(current.reference)}" autocomplete="off" spellcheck="false" placeholder="z. B. Mat 5:3-10 oder Ps 23" role="combobox" aria-autocomplete="list" aria-controls="reference-suggestions" aria-expanded="false" />
               <button class="show-button" type="submit">Anzeigen</button>
             </div>
+            <div class="chapter-navigation" aria-label="Kapitel wechseln"><button id="previous-chapter" type="button" title="Vorheriges Kapitel" aria-label="Vorheriges Kapitel">←</button><button id="next-chapter" type="button" title="Nächstes Kapitel" aria-label="Nächstes Kapitel">→</button></div>
             <div id="reference-suggestions" class="reference-suggestions" role="listbox" hidden></div>
           </div>
           <p class="help">Kürzel funktionieren: Mat, Ps, Joh, 1 Kor …</p>
@@ -96,6 +102,18 @@ function render() {
               </button>`).join("")}
           </div>
         </section>
+        <details class="appearance-settings">
+          <summary>Darstellung der Ausgabe</summary>
+          <div class="appearance-fields">
+            <label>Hintergrundfarbe <input id="background-color" type="color" value="${escapeAttr(current.presentation.backgroundColor)}" /></label>
+            <label>Schriftfarbe <input id="text-color" type="color" value="${escapeAttr(current.presentation.textColor)}" /></label>
+            <label>Versnummern <input id="verse-number-color" type="color" value="${escapeAttr(current.presentation.verseNumberColor)}" /></label>
+            <label>Größe Versnummern <span class="range-row"><input id="verse-number-scale" type="range" min="0.7" max="2.4" step="0.1" value="${current.presentation.verseNumberScale}" /><output id="verse-number-scale-value">${Math.round(current.presentation.verseNumberScale * 100)}%</output></span></label>
+            <label class="image-picker">Hintergrundbild <input id="background-image" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+            <button id="remove-background-image" class="secondary-button" type="button" ${current.presentation.backgroundImage ? "" : "disabled"}>Hintergrundbild entfernen</button>
+            <p id="background-image-status" class="appearance-note">${current.presentation.backgroundImage ? "Eigenes Hintergrundbild aktiv." : "PNG, JPG oder WebP · wird lokal gespeichert."}</p>
+          </div>
+        </details>
         <div class="output-controls">
           <button id="open-output" class="output-button" type="button">${desktop ? "Ausgabe auf Bildschirm 2 öffnen" : "Ausgabefenster öffnen"}</button>
           <p>${desktop ? "Der zweite Bildschirm wird automatisch erkannt und im Vollbild verwendet." : "Danach das Fenster auf Bildschirm 2 in Vollbild setzen."}</p>
@@ -130,6 +148,11 @@ function render() {
   }))
   document.querySelector("#fullscreen").addEventListener("click", toggleFullscreen)
   document.querySelector("#open-output").addEventListener("click", openOutput)
+  document.querySelector("#previous-chapter").addEventListener("click", () => shiftChapter(-1))
+  document.querySelector("#next-chapter").addEventListener("click", () => shiftChapter(1))
+  document.querySelector(".stage").addEventListener("scroll", syncOutputScroll, { passive: true })
+  wirePresentationSettings()
+  applyPresentationStyle(document.querySelector(".stage"), current.presentation)
   document.querySelector("#output-display")?.addEventListener("change", async (event) => {
     desktopSettings.preferredOutputDisplayId = await desktop.setOutputDisplay(event.currentTarget.value)
     render()
@@ -208,7 +231,7 @@ function handleReferenceKeys(event) {
 function renderOutput() {
   const selected = translations.find((translation) => translation.id === current.translation) || translations[0]
   const verseMarkup = current.verses.length
-    ? current.verses.map((verse) => `<p class="verse"><sup>${verse.number}</sup>${escapeHtml(verse.text)}</p>`).join("")
+    ? current.verses.map((verse) => verseMarkup(verse)).join("")
     : `<div class="empty"><p>Ausgabe verbunden.</p><span>Wähle im Bedienfenster eine Bibelstelle.</span></div>`
 
   app.innerHTML = `
@@ -218,6 +241,126 @@ function renderOutput() {
       <div class="stage-footer"><span>${escapeHtml(current.title || current.reference)}</span><span>${selected.short}</span></div>
     </main>`
   document.querySelector("#output-fullscreen").addEventListener("click", toggleOutputFullscreen)
+  applyPresentationStyle(document.querySelector(".output-stage"), current.presentation)
+}
+
+function verseMarkup(verse) {
+  return `<p class="verse"><sup>${verse.number}</sup>${escapeHtml(displayVerseText(verse))}</p>`
+}
+
+function displayVerseText(verse) {
+  const value = String(verse.text || "")
+  if (current.translation !== "nlt") return value
+  return value.replace(new RegExp(`^\\s*${escapeRegExp(String(verse.number))}(?=[\\s“”"'])\\s*`), "")
+}
+
+function shiftChapter(direction) {
+  const field = document.querySelector("#reference")
+  const reference = field?.value.trim() || current.reference
+  const match = reference.match(/^(.+?\s+)(\d+)(.*)$/)
+  if (!match) {
+    current.error = "Gib zuerst eine Bibelstelle wie John 3:16 ein."
+    render()
+    return
+  }
+  const chapter = Math.max(1, Number(match[2]) + direction)
+  const nextReference = `${match[1]}${chapter}${match[3]}`
+  current.reference = nextReference
+  field.value = nextReference
+  loadPassage()
+}
+
+function normalizePresentation(value) {
+  const input = value && typeof value === "object" ? value : {}
+  const color = (candidate, fallback) => /^#[0-9a-f]{6}$/i.test(candidate || "") ? candidate : fallback
+  const scale = Number(input.verseNumberScale)
+  return {
+    backgroundColor: color(input.backgroundColor, defaultPresentation.backgroundColor),
+    textColor: color(input.textColor, defaultPresentation.textColor),
+    verseNumberColor: color(input.verseNumberColor, defaultPresentation.verseNumberColor),
+    verseNumberScale: Number.isFinite(scale) ? Math.min(2.4, Math.max(0.7, scale)) : defaultPresentation.verseNumberScale,
+    backgroundImage: typeof input.backgroundImage === "string" && input.backgroundImage.startsWith("data:image/") ? input.backgroundImage : ""
+  }
+}
+
+function wirePresentationSettings() {
+  const update = () => {
+    current.presentation = normalizePresentation({
+      backgroundColor: document.querySelector("#background-color").value,
+      textColor: document.querySelector("#text-color").value,
+      verseNumberColor: document.querySelector("#verse-number-color").value,
+      verseNumberScale: document.querySelector("#verse-number-scale").value,
+      backgroundImage: current.presentation.backgroundImage
+    })
+    document.querySelector("#verse-number-scale-value").value = `${Math.round(current.presentation.verseNumberScale * 100)}%`
+    applyPresentationStyle(document.querySelector(".stage"), current.presentation)
+    publishState()
+  }
+  document.querySelectorAll("#background-color, #text-color, #verse-number-color, #verse-number-scale").forEach((input) => input.addEventListener("input", update))
+  document.querySelector("#background-image").addEventListener("change", loadBackgroundImage)
+  document.querySelector("#remove-background-image").addEventListener("click", () => {
+    current.presentation.backgroundImage = ""
+    applyPresentationStyle(document.querySelector(".stage"), current.presentation)
+    publishState()
+    render()
+  })
+}
+
+async function loadBackgroundImage(event) {
+  const file = event.currentTarget.files?.[0]
+  if (!file) return
+  const status = document.querySelector("#background-image-status")
+  try {
+    status.textContent = "Bild wird vorbereitet …"
+    const image = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => { const loaded = new Image(); loaded.onload = () => resolve(loaded); loaded.onerror = reject; loaded.src = reader.result }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+    const ratio = Math.min(1, 1600 / image.naturalWidth)
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.round(image.naturalWidth * ratio)
+    canvas.height = Math.round(image.naturalHeight * ratio)
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.78)
+    if (dataUrl.length > 2_500_000) throw new Error("Das Bild ist nach der Optimierung noch zu groß. Bitte ein kleineres Bild wählen.")
+    current.presentation.backgroundImage = dataUrl
+    applyPresentationStyle(document.querySelector(".stage"), current.presentation)
+    publishState()
+    status.textContent = "Eigenes Hintergrundbild aktiv."
+    document.querySelector("#remove-background-image").disabled = false
+  } catch (error) {
+    status.textContent = error.message || "Das Bild konnte nicht geladen werden."
+  }
+}
+
+function applyPresentationStyle(element, presentation) {
+  if (!element) return
+  const settings = normalizePresentation(presentation)
+  element.style.setProperty("--presentation-background", settings.backgroundColor)
+  element.style.setProperty("--presentation-text", settings.textColor)
+  element.style.setProperty("--presentation-number", settings.verseNumberColor)
+  element.style.setProperty("--presentation-number-scale", settings.verseNumberScale)
+  element.style.backgroundImage = settings.backgroundImage ? `linear-gradient(rgb(0 0 0 / 24%), rgb(0 0 0 / 24%)), url(${settings.backgroundImage})` : "none"
+}
+
+function syncOutputScroll(event) {
+  const source = event.currentTarget
+  const maximum = source.scrollHeight - source.clientHeight
+  if (maximum <= 0) return
+  const position = source.scrollTop / maximum
+  desktop?.sendPresentationScroll(position)
+  channel?.postMessage({ type: "scroll", position })
+  if (outputWindow && !outputWindow.closed) outputWindow.postMessage({ type: "scroll", position }, location.origin)
+}
+
+function applyOutputScroll(position) {
+  const ratio = Number(position)
+  if (!Number.isFinite(ratio)) return
+  const output = document.querySelector(".output-stage")
+  if (!output) return
+  requestAnimationFrame(() => { output.scrollTop = Math.max(0, Math.min(1, ratio)) * (output.scrollHeight - output.clientHeight) })
 }
 
 async function loadPassage(event) {
@@ -341,3 +484,4 @@ function readSavedState() {
 
 function escapeHtml(value = "") { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;" }[char])) }
 function escapeAttr(value = "") { return escapeHtml(value) }
+function escapeRegExp(value = "") { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") }

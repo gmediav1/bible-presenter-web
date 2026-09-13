@@ -1,6 +1,6 @@
 {
   "name": "bible-presenter-web",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Bible presentation software with synchronized second-screen output.",
   "author": "Gwinn Media",
   "private": true,
@@ -14,6 +14,8 @@
     "desktop:start": "npm run build && electron .",
     "package": "npm run build && electron-builder --publish never",
     "package:win": "npm run build && electron-builder --win nsis --publish never",
+    "package:win:update": "npm run build && electron-builder --win nsis --publish never",
+    "publish:win-update": "node scripts/publish-windows-update.mjs",
     "package:win:dir": "npm run build && electron-builder --win dir --publish never"
   },
   "devDependencies": {

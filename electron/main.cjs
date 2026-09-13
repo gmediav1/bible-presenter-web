@@ -130,6 +130,13 @@ ipcMain.on("presentation:state", (event, state) => {
   sendPresentationState()
 })
 
+ipcMain.on("presentation:scroll", (event, position) => {
+  if (event.sender !== controlWindow?.webContents || !outputWindow || outputWindow.isDestroyed()) return
+  const ratio = Number(position)
+  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return
+  outputWindow.webContents.send("presentation:scroll", ratio)
+})
+
 ipcMain.handle("presentation:toggle-output-fullscreen", (event) => {
   if (event.sender !== outputWindow?.webContents || !outputWindow) return false
   outputWindow.setFullScreen(!outputWindow.isFullScreen())

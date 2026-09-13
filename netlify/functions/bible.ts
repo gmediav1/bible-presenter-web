@@ -63,6 +63,10 @@ function cleanNltHtml(value: string) {
   return text(output.replace(/<a\b[^>]*class=["'][^"']*a-tn[^"']*["'][^>]*>.*?<\/a>/gis, ""))
 }
 
+function removeEmbeddedVerseNumber(value: string, number: number) {
+  return value.replace(new RegExp(`^\\s*${number}(?=[\\s“”"'])\\s*`), "")
+}
+
 function nltReference(parsed: ReturnType<typeof parseReference>) {
   const names: Record<string, string> = {
     "1 Samuel":"1Sam", "2 Samuel":"2Sam", "1 Kings":"1Kgs", "2 Kings":"2Kgs", "1 Chronicles":"1Chr", "2 Chronicles":"2Chr",
@@ -82,7 +86,7 @@ async function getNlt(parsed: ReturnType<typeof parseReference>) {
   const html = await response.text()
   if (!response.ok) throw new Error("Die NLT-Quelle konnte die Stelle gerade nicht liefern.")
   const verses = [...html.matchAll(/<verse_export\b[^>]*\bvn="(\d+)"[^>]*>([\s\S]*?)<\/verse_export>/gi)]
-    .map((match) => ({ number: Number(match[1]), text: cleanNltHtml(match[2]) }))
+    .map((match) => ({ number: Number(match[1]), text: removeEmbeddedVerseNumber(cleanNltHtml(match[2]), Number(match[1])) }))
     .filter((verse) => verse.text)
   if (!verses.length) throw new Error("Für diese NLT-Stelle wurden keine Verse gefunden.")
   return {

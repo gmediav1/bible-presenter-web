@@ -4,10 +4,16 @@ contextBridge.exposeInMainWorld("biblePresenterDesktop", {
   openOutput: () => ipcRenderer.invoke("presentation:open-output"),
   getPresentationState: () => ipcRenderer.invoke("presentation:get-state"),
   sendPresentationState: (state) => ipcRenderer.send("presentation:state", state),
+  sendPresentationScroll: (position) => ipcRenderer.send("presentation:scroll", position),
   onPresentationState: (listener) => {
     const wrapped = (_event, state) => listener(state)
     ipcRenderer.on("presentation:state", wrapped)
     return () => ipcRenderer.removeListener("presentation:state", wrapped)
+  },
+  onPresentationScroll: (listener) => {
+    const wrapped = (_event, position) => listener(position)
+    ipcRenderer.on("presentation:scroll", wrapped)
+    return () => ipcRenderer.removeListener("presentation:scroll", wrapped)
   },
   toggleOutputFullscreen: () => ipcRenderer.invoke("presentation:toggle-output-fullscreen"),
   loadPassage: (request) => ipcRenderer.invoke("bible:load", request),
