@@ -115,6 +115,38 @@ async function getPublicDomainTranslation(translation: typeof translations[strin
   }
 }
 
+async function getYouVersionTranslation(translation: typeof translations[string], parsed: ReturnType<typeof parseReference>, key: string) {
+  let passageNumbers: number[]
+  if (parsed.wholeChapter) {
+    const chapter = await yv(`bibles/${translation.id}/books/${parsed.book}/chapters/${parsed.chapter}`, key)
+    passageNumbers = Array.isArray(chapter?.verses)
+      ? chapter.verses.map((verse: any) => Number(verse.id ?? String(verse.passage_id || "").split(".").at(-1))).filter((number: number) => Number.isInteger(number) && number > 0)
+      : []
+    if (!passageNumbers.length) throw new Error("Die Versaufteilung für dieses Kapitel konnte nicht geladen werden.")
+  } else {
+    passageNumbers = Array.from({ length: parsed.lastVerse - parsed.firstVerse + 1 }, (_, index) => parsed.firstVerse + index)
+  }
+
+  const verses: { number: number; text: string }[] = []
+  const batchSize = 8
+  for (let offset = 0; offset < passageNumbers.length; offset += batchSize) {
+    const batch = passageNumbers.slice(offset, offset + batchSize)
+    const loadedVerses = await Promise.all(batch.map(async (number) => {
+      const passageId = `${parsed.book}.${parsed.chapter}.${number}`
+      const passage = await yv(`bibles/${translation.id}/passages/${passageId}?format=text&include_headings=false&include_notes=false`, key)
+      const verseText = text(passage)
+      return verseText ? { number, text: verseText } : null
+    }))
+    verses.push(...loadedVerses.filter((verse): verse is { number: number; text: string } => Boolean(verse)))
+  }
+
+  if (!verses.length) throw new Error("Für diese Stelle wurden keine Verse gefunden.")
+  return {
+    verses,
+    title: `${translation.name} · ${parsed.canonicalReference}`,
+    copyright: "Bible text provided through YouVersion."
+  }
+}
 export default async (request: Request, _context: Context) => {
   try {
     const url = new URL(request.url)
@@ -141,16 +173,8 @@ export default async (request: Request, _context: Context) => {
     }
     const key = Netlify.env.get("YOUVERSION_APP_KEY")
     if (!key) return Response.json({ error:"Die Bibelquelle ist noch nicht verbunden." }, { status:503 })
-    const verses = []
-    const passageNumbers = parsed.wholeChapter ? [null] : Array.from({ length: parsed.lastVerse - parsed.firstVerse + 1 }, (_, index) => parsed.firstVerse + index)
-    for (const number of passageNumbers) {
-      const passageId = number === null ? `${parsed.book}.${parsed.chapter}` : `${parsed.book}.${parsed.chapter}.${number}`
-      const passage = await yv(`bibles/${translation.id}/passages/${passageId}?format=text&include_headings=false&include_notes=false`, key)
-      const verseText = text(passage)
-      if (verseText) verses.push({ number: number || 1, text: verseText })
-    }
-    if (!verses.length) return Response.json({ error:"Für diese Stelle wurden keine Verse gefunden." }, { status:404 })
-    return Response.json({ verses, title: `${translation.name} · ${url.searchParams.get("reference")}`, copyright: "Bible text provided through YouVersion." }, { headers:{ "Cache-Control":"public, max-age=86400, s-maxage=2592000" } })
+    const payload = await getYouVersionTranslation(translation, parsed, key)
+    return Response.json(payload, { headers:{ "Cache-Control":"public, max-age=86400, s-maxage=2592000" } })
   } catch (error: any) {
     return Response.json({ error:error?.message || "Die Bibelstelle konnte nicht geladen werden." }, { status:400 })
   }
