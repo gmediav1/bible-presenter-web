@@ -59,7 +59,7 @@ function removeNltClassedElement(value: string, tagName: string, className: stri
     if (!target) break
     let depth = 1
     let cursor = target.index + target[0].length
-    const tag = new RegExp("<\\\\/?" + tagName + "\\\\b[^>]*>", "gi")
+    const tag = new RegExp("<\\/?" + tagName + "\\b[^>]*>", "gi")
     tag.lastIndex = cursor
     let token: RegExpExecArray | null
     while (depth && (token = tag.exec(output))) {
