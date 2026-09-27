@@ -43,6 +43,35 @@ async function yv(path: string, key: string) {
   return body?.data || body
 }
 
+function removeNltClassedElement(value: string, tagName: string, className: string) {
+  let output = value
+  const opening = new RegExp("<" + tagName + "\\b[^>]*>", "gi")
+  while (true) {
+    let match: RegExpExecArray | null
+    let target: RegExpExecArray | null = null
+    while ((match = opening.exec(output))) {
+      const classes = /\bclass=["']([^"']*)["']/i.exec(match[0])?.[1].split(/\s+/) || []
+      if (classes.includes(className)) {
+        target = match
+        break
+      }
+    }
+    if (!target) break
+    let depth = 1
+    let cursor = target.index + target[0].length
+    const tag = new RegExp("<\\\\/?" + tagName + "\\\\b[^>]*>", "gi")
+    tag.lastIndex = cursor
+    let token: RegExpExecArray | null
+    while (depth && (token = tag.exec(output))) {
+      depth += token[0].startsWith("</") ? -1 : 1
+      cursor = tag.lastIndex
+    }
+    if (depth) break
+    output = output.slice(0, target.index) + output.slice(cursor)
+  }
+  return output
+}
+
 function cleanNltHtml(value: string) {
   let output = value
   const noteStart = /<span\b[^>]*class=["'][^"']*\btn\b[^"']*["'][^>]*>/i
@@ -82,7 +111,12 @@ async function getNlt(parsed: ReturnType<typeof parseReference>) {
   const html = await response.text()
   if (!response.ok) throw new Error("Die NLT-Quelle konnte die Stelle gerade nicht liefern.")
   const verses = [...html.matchAll(/<verse_export\b[^>]*\bvn="(\d+)"[^>]*>([\s\S]*?)<\/verse_export>/gi)]
-    .map((match) => ({ number: Number(match[1]), text: cleanNltHtml(match[2]) }))
+    .map((match) => {
+      const number = Number(match[1])
+      const withoutChapterHeading = removeNltClassedElement(match[2], "h2", "chapter-number")
+      const withoutVerseMarker = removeNltClassedElement(withoutChapterHeading, "span", "vn")
+      return { number, text: cleanNltHtml(withoutVerseMarker) }
+    })
     .filter((verse) => verse.text)
   if (!verses.length) throw new Error("Für diese NLT-Stelle wurden keine Verse gefunden.")
   return {
