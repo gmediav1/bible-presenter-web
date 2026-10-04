@@ -24,6 +24,19 @@ function parseReference(reference: string) {
   return { book: book.code, bookName: book.name, canonicalReference: `${book.name} ${match[2]}${match[3] ? `:${match[3]}${match[4] ? `-${match[4]}` : ""}` : ""}`, chapter: Number(match[2]), firstVerse, lastVerse, wholeChapter }
 }
 
+function clampReferenceToChapter(parsed: ReturnType<typeof parseReference>, lastAvailableVerse: number) {
+  if (!Number.isInteger(lastAvailableVerse) || lastAvailableVerse < 1) throw new Error("Die Versaufteilung dieses Kapitels konnte nicht ermittelt werden.")
+  if (parsed.wholeChapter) {
+    return { firstVerse: 1, lastVerse: lastAvailableVerse, reference: parsed.bookName + " " + parsed.chapter }
+  }
+  if (parsed.firstVerse > lastAvailableVerse) {
+    throw new Error(parsed.bookName + " " + parsed.chapter + " endet bei Vers " + lastAvailableVerse + ". Bitte wähle einen Vers bis " + lastAvailableVerse + ".")
+  }
+  const lastVerse = Math.min(parsed.lastVerse, lastAvailableVerse)
+  const reference = parsed.bookName + " " + parsed.chapter + ":" + parsed.firstVerse + (lastVerse > parsed.firstVerse ? "-" + lastVerse : "")
+  return { firstVerse: parsed.firstVerse, lastVerse, reference }
+}
+
 function text(value: unknown): string {
   if (typeof value === "string") return value.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()
   if (Array.isArray(value)) return value.map(text).join(" ")
@@ -104,25 +117,29 @@ function nltReference(parsed: ReturnType<typeof parseReference>) {
 }
 
 async function getNlt(parsed: ReturnType<typeof parseReference>) {
+  const chapterParsed = { ...parsed, wholeChapter: true }
   const url = new URL("https://api.nlt.to/api/passages")
-  url.searchParams.set("ref", nltReference(parsed))
+  url.searchParams.set("ref", nltReference(chapterParsed))
   url.searchParams.set("version", "NLT")
   url.searchParams.set("key", Netlify.env.get("NLT_API_KEY") || "TEST")
   const response = await fetch(url)
   const html = await response.text()
   if (!response.ok) throw new Error("Die NLT-Quelle konnte die Stelle gerade nicht liefern.")
-  const verses = [...html.matchAll(/<verse_export\b[^>]*\bvn="(\d+)"[^>]*>([\s\S]*?)<\/verse_export>/gi)]
+  const chapterVerses = [...html.matchAll(/<verse_export\\b[^>]*\\bvn="(\\d+)"[^>]*>([\\s\\S]*?)<\\/verse_export>/gi)]
     .map((match) => {
       const number = Number(match[1])
       const withoutChapterHeading = removeNltClassedElement(match[2], "h2", "chapter-number")
       const withoutVerseMarker = removeNltClassedElement(withoutChapterHeading, "span", "vn")
       return { number, text: cleanNltHtml(withoutVerseMarker) }
     })
-    .filter((verse) => verse.text)
-  if (!verses.length) throw new Error("Für diese NLT-Stelle wurden keine Verse gefunden.")
+    .filter((verse) => Number.isInteger(verse.number) && verse.number > 0 && verse.text)
+  if (!chapterVerses.length) throw new Error("Für diese NLT-Stelle wurden keine Verse gefunden.")
+  const clamped = clampReferenceToChapter(parsed, Math.max(...chapterVerses.map((verse) => verse.number)))
+  const verses = chapterVerses.filter((verse) => verse.number >= clamped.firstVerse && verse.number <= clamped.lastVerse)
   return {
     verses,
-    title: `New Living Translation · ${parsed.canonicalReference}`,
+    reference: clamped.reference,
+    title: "New Living Translation · " + clamped.reference,
     copyright: "Scripture quotations are taken from the Holy Bible, New Living Translation, copyright © 1996, 2004, 2015 by Tyndale House Foundation. Used by permission of Tyndale House Publishers, Inc. All rights reserved."
   }
 }
@@ -135,53 +152,58 @@ function publicText(value: unknown): string {
 }
 
 async function getPublicDomainTranslation(translation: typeof translations[string], parsed: ReturnType<typeof parseReference>) {
-  const response = await fetch(`https://bible.chandlerswift.com/api/${translation.publicId}/${parsed.book}/${parsed.chapter}.json`)
+  const response = await fetch("https://bible.chandlerswift.com/api/" + translation.publicId + "/" + parsed.book + "/" + parsed.chapter + ".json")
   const payload = await response.json().catch(() => null)
-  if (!response.ok || !payload?.chapter?.content) throw new Error(`${translation.short} konnte die Stelle gerade nicht liefern.`)
-  const verses = payload.chapter.content
-    .filter((item: any) => item.type === "verse" && (parsed.wholeChapter || (Number(item.number) >= parsed.firstVerse && Number(item.number) <= parsed.lastVerse)))
+  if (!response.ok || !payload?.chapter?.content) throw new Error(translation.short + " konnte die Stelle gerade nicht liefern.")
+  const chapterVerses = payload.chapter.content
+    .filter((item: any) => item.type === "verse")
     .map((item: any) => ({ number: Number(item.number), text: publicText(item.content).trim() }))
-    .filter((verse: any) => verse.text)
-  if (!verses.length) throw new Error("Für diese Stelle wurden keine Verse gefunden.")
+    .filter((verse: any) => Number.isInteger(verse.number) && verse.number > 0 && verse.text)
+  if (!chapterVerses.length) throw new Error("Für diese Stelle wurden keine Verse gefunden.")
+  const clamped = clampReferenceToChapter(parsed, Math.max(...chapterVerses.map((verse: any) => verse.number)))
+  const verses = chapterVerses.filter((verse: any) => verse.number >= clamped.firstVerse && verse.number <= clamped.lastVerse)
   return {
     verses,
-    title: `${payload.translation?.name || translation.name} · ${parsed.canonicalReference}`,
-    copyright: payload.translation?.licenseNotes || `Bible text: ${payload.translation?.name || translation.name}.`
+    reference: clamped.reference,
+    title: (payload.translation?.name || translation.name) + " · " + clamped.reference,
+    copyright: payload.translation?.licenseNotes || ("Bible text: " + (payload.translation?.name || translation.name) + ".")
   }
 }
 
 async function getYouVersionTranslation(translation: typeof translations[string], parsed: ReturnType<typeof parseReference>, key: string) {
-  let passageNumbers: number[]
-  if (parsed.wholeChapter) {
-    const chapter = await yv(`bibles/${translation.id}/books/${parsed.book}/chapters/${parsed.chapter}`, key)
-    passageNumbers = Array.isArray(chapter?.verses)
-      ? chapter.verses.map((verse: any) => Number(verse.id ?? String(verse.passage_id || "").split(".").at(-1))).filter((number: number) => Number.isInteger(number) && number > 0)
-      : []
-    if (!passageNumbers.length) throw new Error("Die Versaufteilung für dieses Kapitel konnte nicht geladen werden.")
-  } else {
-    passageNumbers = Array.from({ length: parsed.lastVerse - parsed.firstVerse + 1 }, (_, index) => parsed.firstVerse + index)
-  }
-
+  const chapter = await yv("bibles/" + translation.id + "/books/" + parsed.book + "/chapters/" + parsed.chapter, key)
+  const chapterVerses = Array.isArray(chapter?.verses)
+    ? chapter.verses.map((verse: any) => {
+        const rawId = verse.passage_id ?? verse.id
+        return typeof rawId === "number" ? rawId : Number(String(rawId || "").split(".").at(-1))
+      }).filter((number: number) => Number.isInteger(number) && number > 0)
+    : []
+  if (!chapterVerses.length) throw new Error("Die Versaufteilung für dieses Kapitel konnte nicht geladen werden.")
+  const clamped = clampReferenceToChapter(parsed, Math.max(...chapterVerses))
+  const passageNumbers = [...new Set(chapterVerses)]
+    .filter((number) => number >= clamped.firstVerse && number <= clamped.lastVerse)
+    .sort((a, b) => a - b)
   const verses: { number: number; text: string }[] = []
   const batchSize = 8
   for (let offset = 0; offset < passageNumbers.length; offset += batchSize) {
     const batch = passageNumbers.slice(offset, offset + batchSize)
     const loadedVerses = await Promise.all(batch.map(async (number) => {
-      const passageId = `${parsed.book}.${parsed.chapter}.${number}`
-      const passage = await yv(`bibles/${translation.id}/passages/${passageId}?format=text&include_headings=false&include_notes=false`, key)
+      const passageId = parsed.book + "." + parsed.chapter + "." + number
+      const passage = await yv("bibles/" + translation.id + "/passages/" + passageId + "?format=text&include_headings=false&include_notes=false", key)
       const verseText = text(passage)
       return verseText ? { number, text: verseText } : null
     }))
     verses.push(...loadedVerses.filter((verse): verse is { number: number; text: string } => Boolean(verse)))
   }
-
   if (!verses.length) throw new Error("Für diese Stelle wurden keine Verse gefunden.")
   return {
     verses,
-    title: `${translation.name} · ${parsed.canonicalReference}`,
+    reference: clamped.reference,
+    title: translation.name + " · " + clamped.reference,
     copyright: "Bible text provided through YouVersion."
   }
 }
+
 export default async (request: Request, _context: Context) => {
   try {
     const url = new URL(request.url)
@@ -197,12 +219,19 @@ export default async (request: Request, _context: Context) => {
       return Response.json(payload, { headers:{ "Cache-Control":"public, max-age=86400, s-maxage=2592000" } })
     }
     if (translation.id === "kjv") {
-      const response = await fetch(`https://bible-api.com/${encodeURIComponent(parsed.canonicalReference)}?translation=kjv`)
+      const chapterReference = parsed.bookName + " " + parsed.chapter
+      const response = await fetch("https://bible-api.com/" + encodeURIComponent(chapterReference) + "?translation=kjv")
       const payload = await response.json().catch(() => null)
       if (!response.ok || !payload?.verses?.length) return Response.json({ error:"Die KJV-Stelle konnte nicht geladen werden." }, { status:502 })
+      const chapterVerses = payload.verses
+        .map((verse: any) => ({ number:Number(verse.verse), text:text(verse.text) }))
+        .filter((verse: any) => Number.isInteger(verse.number) && verse.number > 0 && verse.text)
+      const clamped = clampReferenceToChapter(parsed, Math.max(...chapterVerses.map((verse: any) => verse.number)))
+      const verses = chapterVerses.filter((verse: any) => verse.number >= clamped.firstVerse && verse.number <= clamped.lastVerse)
       return Response.json({
-        verses: payload.verses.map((verse: any) => ({ number:Number(verse.verse), text:text(verse.text) })),
-        title: `King James Version · ${payload.reference || url.searchParams.get("reference")}`,
+        verses,
+        reference: clamped.reference,
+        title: "King James Version · " + clamped.reference,
         copyright: "King James Version - public domain outside the United Kingdom."
       }, { headers:{ "Cache-Control":"public, max-age=86400, s-maxage=2592000" } })
     }
