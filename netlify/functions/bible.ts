@@ -43,6 +43,7 @@ async function yv(path: string, key: string) {
   return body?.data || body
 }
 
+// Strip provider-only chapter headings and verse labels before converting the NLT HTML to text.
 function removeNltClassedElement(value: string, tagName: string, className: string) {
   let output = value
   const opening = new RegExp("<" + tagName + "\\b[^>]*>", "gi")
