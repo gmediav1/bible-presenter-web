@@ -125,7 +125,7 @@ async function getNlt(parsed: ReturnType<typeof parseReference>) {
   const response = await fetch(url)
   const html = await response.text()
   if (!response.ok) throw new Error("Die NLT-Quelle konnte die Stelle gerade nicht liefern.")
-  const chapterVerses = [...html.matchAll(/<verse_export\\b[^>]*\\bvn="(\\d+)"[^>]*>([\\s\\S]*?)<\\/verse_export>/gi)]
+  const chapterVerses = [...html.matchAll(/<verse_export\b[^>]*\bvn="(\d+)"[^>]*>([\s\S]*?)<\/verse_export>/gi)]
     .map((match) => {
       const number = Number(match[1])
       const withoutChapterHeading = removeNltClassedElement(match[2], "h2", "chapter-number")
